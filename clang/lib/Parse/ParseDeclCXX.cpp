@@ -25,6 +25,7 @@
 #include "clang/Sema/ParsedTemplate.h"
 #include "clang/Sema/Scope.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/Support/TimeProfiler.h"
 
 using namespace clang;
 
@@ -216,6 +217,7 @@ Parser::DeclGroupPtrTy Parser::ParseNamespace(DeclaratorContext Context,
       getCurScope(), InlineLoc, NamespaceLoc, IdentLoc, Ident,
       T.getOpenLocation(), attrs, ImplicitUsingDirectiveDecl);
 
+  llvm::TimeTraceScope timeScope("ParseNamespace", Ident != nullptr ? Ident->getName().data() : "<noname>");
   PrettyDeclStackTraceEntry CrashInfo(Actions.Context, NamespcDecl,
                                       NamespaceLoc, "parsing namespace");
 

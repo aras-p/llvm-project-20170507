@@ -28,6 +28,7 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Mutex.h"
+#include "llvm/Support/TimeProfiler.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
@@ -1629,6 +1630,10 @@ bool FPPassManager::runOnFunction(Function &F) {
     FunctionSize = F.getInstructionCount();
   }
 
+  bool profileTime = llvm::TimeTraceProfilerEnabled();
+  if (profileTime)
+    llvm::TimeTraceProfilerBegin("OptFunction", F.getName().data());
+
   for (unsigned Index = 0; Index < getNumContainedPasses(); ++Index) {
     FunctionPass *FP = getContainedPass(Index);
     bool LocalChanged = false;
@@ -1669,12 +1674,17 @@ bool FPPassManager::runOnFunction(Function &F) {
     recordAvailableAnalysis(FP);
     removeDeadPasses(FP, F.getName(), ON_FUNCTION_MSG);
   }
+
+  if (profileTime)
+    llvm::TimeTraceProfilerEnd();
+
   return Changed;
 }
 
 bool FPPassManager::runOnModule(Module &M) {
   bool Changed = false;
 
+  llvm::TimeTraceScope timeScope("OptModule", M.getName().data());
   for (Function &F : M)
     Changed |= runOnFunction(F);
 
@@ -1707,6 +1717,8 @@ bool FPPassManager::doFinalization(Module &M) {
 /// the module, and if so, return true.
 bool
 MPPassManager::runOnModule(Module &M) {
+  llvm::TimeTraceScope timeScope("OptModule", M.getName().data());
+
   bool Changed = false;
 
   // Initialize on-the-fly passes

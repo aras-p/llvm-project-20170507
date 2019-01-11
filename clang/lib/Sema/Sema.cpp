@@ -40,6 +40,8 @@
 #include "clang/Sema/TemplateInstCallback.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallSet.h"
+#include "llvm/Support/TimeProfiler.h"
+
 using namespace clang;
 using namespace sema;
 
@@ -93,6 +95,11 @@ public:
       SourceManager &SM = S->getSourceManager();
       SourceLocation IncludeLoc = SM.getIncludeLoc(SM.getFileID(Loc));
       if (IncludeLoc.isValid()) {
+        if (llvm::TimeTraceProfilerEnabled()) {
+          auto fe = SM.getFileEntryForID(SM.getFileID(Loc));
+          llvm::TimeTraceProfilerBegin("SourceFile", fe != nullptr ? fe->getName().data() : "<unknown>");
+        }
+
         IncludeStack.push_back(IncludeLoc);
         S->DiagnoseNonDefaultPragmaPack(
             Sema::PragmaPackDiagnoseKind::NonDefaultStateAtInclude, IncludeLoc);
@@ -100,10 +107,14 @@ public:
       break;
     }
     case ExitFile:
-      if (!IncludeStack.empty())
+      if (!IncludeStack.empty()) {
+        if (llvm::TimeTraceProfilerEnabled()) {
+          llvm::TimeTraceProfilerEnd();
+        }
         S->DiagnoseNonDefaultPragmaPack(
             Sema::PragmaPackDiagnoseKind::ChangedStateAtExit,
             IncludeStack.pop_back_val());
+      }
       break;
     default:
       break;
@@ -914,7 +925,10 @@ void Sema::ActOnEndOfTranslationUnit() {
                                    Pending.begin(), Pending.end());
     }
 
-    PerformPendingInstantiations();
+    {
+      llvm::TimeTraceScope timeScope("PerformPendingInstantiations", "");
+      PerformPendingInstantiations();
+    }
 
     assert(LateParsedInstantiations.empty() &&
            "end of TU template instantiation should not create more "

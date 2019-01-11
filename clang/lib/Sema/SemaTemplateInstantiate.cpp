@@ -26,6 +26,7 @@
 #include "clang/Sema/Template.h"
 #include "clang/Sema/TemplateDeduction.h"
 #include "clang/Sema/TemplateInstCallback.h"
+#include "llvm/Support/TimeProfiler.h"
 
 using namespace clang;
 using namespace sema;
@@ -2009,6 +2010,9 @@ Sema::InstantiateClass(SourceLocation PointOfInstantiation,
                                 Instantiation->getInstantiatedFromMemberClass(),
                                      Pattern, PatternDef, TSK, Complain))
     return true;
+
+  llvm::TimeTraceScope timeScope("InstantiateClass", Instantiation->getNameAsString().c_str());
+
   Pattern = PatternDef;
 
   // Record the point of instantiation.

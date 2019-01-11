@@ -23,6 +23,7 @@
 #include "clang/Sema/SemaConsumer.h"
 #include "clang/Sema/TemplateInstCallback.h"
 #include "llvm/Support/CrashRecoveryContext.h"
+#include "llvm/Support/TimeProfiler.h"
 #include <cstdio>
 #include <memory>
 
@@ -151,6 +152,7 @@ void clang::ParseAST(Sema &S, bool PrintStats, bool SkipFunctionBodies) {
   bool HaveLexer = S.getPreprocessor().getCurrentLexer();
 
   if (HaveLexer) {
+    llvm::TimeTraceScope scope("Frontend", "");
     P.Initialize();
     Parser::DeclGroupPtrTy ADecl;
     for (bool AtEOF = P.ParseFirstTopLevelDecl(ADecl); !AtEOF;
@@ -167,7 +169,10 @@ void clang::ParseAST(Sema &S, bool PrintStats, bool SkipFunctionBodies) {
   for (Decl *D : S.WeakTopLevelDecls())
     Consumer->HandleTopLevelDecl(DeclGroupRef(D));
 
-  Consumer->HandleTranslationUnit(S.getASTContext());
+  {
+    llvm::TimeTraceScope scope("Backend", "");
+    Consumer->HandleTranslationUnit(S.getASTContext());
+  }
 
   // Finalize the template instantiation observer chain.
   // FIXME: This (and init.) should be done in the Sema class, but because

@@ -69,7 +69,7 @@ struct TimeTraceProfiler {
     assert(!Stack.empty() && "Must call Begin first");
     auto &e = Stack.back();
     e.Duration = steady_clock::now() - e.Start;
-    if (duration_cast<milliseconds>(e.Duration).count() > 10)
+    if (duration_cast<milliseconds>(e.Duration).count() > 3)
       Entries.emplace_back(e);
     Stack.pop_back();
   }
