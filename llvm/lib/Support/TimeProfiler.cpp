@@ -21,9 +21,11 @@
 using namespace std::chrono;
 
 namespace llvm {
+
 TimeTraceProfiler *TimeTraceProfilerInstance = nullptr;
 
-static void EscapeString(std::string &os, const char *src) {
+static std::string EscapeString(const char *src) {
+  std::string os;
   while (*src) {
     char c = *src;
     switch (c) {
@@ -44,6 +46,7 @@ static void EscapeString(std::string &os, const char *src) {
     }
     ++src;
   }
+  return os;
 }
 
 struct Entry {
@@ -55,27 +58,29 @@ struct Entry {
 
 struct TimeTraceProfiler {
   TimeTraceProfiler() {
-    Stack.reserve(16);
+    Stack.reserve(8);
     Entries.reserve(128);
     StartTime = steady_clock::now();
   }
-  ~TimeTraceProfiler() {}
 
   void Begin(const std::string &name, const std::string &detail) {
     Entry e = {steady_clock::now(), {}, name, detail};
     Stack.emplace_back(e);
   }
+
   void End() {
     assert(!Stack.empty() && "Must call Begin first");
     auto &e = Stack.back();
     e.Duration = steady_clock::now() - e.Start;
+    // skip sections under 3ms in length
     if (duration_cast<milliseconds>(e.Duration).count() > 3)
       Entries.emplace_back(e);
     Stack.pop_back();
   }
-  void Write(std::unique_ptr<raw_pwrite_stream>& os) {
-    while (!Stack.empty())
-      End();
+
+  void Write(std::unique_ptr<raw_pwrite_stream> &os) {
+    assert(Stack.empty() &&
+           "All profiler sections should be ended when calling Write");
 
     *os << "{ \"traceEvents\": [\n";
     *os << "{ \"cat\":\"\", \"pid\":1, \"tid\":0, \"ts\":0, \"ph\":\"M\", "
@@ -83,12 +88,10 @@ struct TimeTraceProfiler {
     for (const auto &e : Entries) {
       auto startUs = duration_cast<microseconds>(e.Start - StartTime).count();
       auto durUs = duration_cast<microseconds>(e.Duration).count();
-      std::string name, detail;
-      EscapeString(name, e.Name.c_str());
-      EscapeString(detail, e.Detail.c_str());
       *os << ", { \"pid\":1, \"tid\":0, \"ph\":\"X\", \"ts\":" << startUs
-          << ", \"dur\":" << durUs << ", \"name\":\"" << name
-          << "\", \"args\":{ \"detail\":\"" << detail << "\"} }\n";
+          << ", \"dur\":" << durUs << ", \"name\":\""
+          << EscapeString(e.Name.c_str()) << "\", \"args\":{ \"detail\":\""
+          << EscapeString(e.Detail.c_str()) << "\"} }\n";
     }
     *os << "] }\n";
   }
@@ -109,7 +112,7 @@ void TimeTraceProfilerCleanup() {
   TimeTraceProfilerInstance = nullptr;
 }
 
-void TimeTraceProfilerWrite(std::unique_ptr<raw_pwrite_stream>& OS) {
+void TimeTraceProfilerWrite(std::unique_ptr<raw_pwrite_stream> &OS) {
   assert(TimeTraceProfilerInstance != nullptr &&
          "Profiler object can't be null");
   TimeTraceProfilerInstance->Write(OS);
@@ -121,7 +124,7 @@ void TimeTraceProfilerBegin(const char *name, const char *detail) {
 }
 
 void TimeTraceProfilerEnd() {
-  if (TimeTraceProfilerInitialize != nullptr)
+  if (TimeTraceProfilerInstance != nullptr)
     TimeTraceProfilerInstance->End();
 }
 
