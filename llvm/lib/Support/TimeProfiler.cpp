@@ -16,6 +16,7 @@
 #include <cassert>
 #include <chrono>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace std::chrono;
@@ -49,9 +50,12 @@ static std::string EscapeString(const char *src) {
   return os;
 }
 
+typedef duration<steady_clock::rep, steady_clock::period> DurationType;
+typedef std::pair<std::string, DurationType> NameAndDuration;
+
 struct Entry {
   time_point<steady_clock> Start;
-  duration<steady_clock::rep, steady_clock::period> Duration;
+  DurationType Duration;
   std::string Name;
   std::string Detail;
 };
@@ -72,10 +76,24 @@ struct TimeTraceProfiler {
     assert(!Stack.empty() && "Must call Begin first");
     auto &e = Stack.back();
     e.Duration = steady_clock::now() - e.Start;
-    // skip sections under 3ms in length
-    if (duration_cast<milliseconds>(e.Duration).count() > 3)
+
+    // only include sections longer than 500us
+    if (duration_cast<microseconds>(e.Duration).count() > 500)
       Entries.emplace_back(e);
-    Stack.pop_back();
+
+    // track total time taken by each "name", but only the topmost levels of them;
+    // e.g. if there's a template instantiation that instantiates other templates
+    // from within, we only want to add the topmost one.
+    // "topmost" happens to be the ones that don't have any currently open
+    // entries above itself.
+    if (std::find_if(
+      ++Stack.rbegin(), Stack.rend(),
+      [&](const Entry& val){ return val.Name == e.Name; }) == Stack.rend()) {
+      TotalPerName[e.Name] += e.Duration;
+      CountPerName[e.Name]++;
+    }
+
+    Stack.pop_back();    
   }
 
   void Write(std::unique_ptr<raw_pwrite_stream> &os) {
@@ -83,21 +101,47 @@ struct TimeTraceProfiler {
            "All profiler sections should be ended when calling Write");
 
     *os << "{ \"traceEvents\": [\n";
-    *os << "{ \"cat\":\"\", \"pid\":1, \"tid\":0, \"ts\":0, \"ph\":\"M\", "
-           "\"name\":\"process_name\", \"args\":{ \"name\":\"clang\" } }\n";
+
+    // emit all events for the main flame graph
     for (const auto &e : Entries) {
       auto startUs = duration_cast<microseconds>(e.Start - StartTime).count();
       auto durUs = duration_cast<microseconds>(e.Duration).count();
-      *os << ", { \"pid\":1, \"tid\":0, \"ph\":\"X\", \"ts\":" << startUs
+      *os << "{ \"pid\":1, \"tid\":0, \"ph\":\"X\", \"ts\":" << startUs
           << ", \"dur\":" << durUs << ", \"name\":\""
           << EscapeString(e.Name.c_str()) << "\", \"args\":{ \"detail\":\""
-          << EscapeString(e.Detail.c_str()) << "\"} }\n";
+          << EscapeString(e.Detail.c_str()) << "\"} },\n";
     }
+
+    // emit totals by section name as additional "thread" events, sorted from
+    // longest one
+    int tid = 1;
+    std::vector<NameAndDuration> sortedTotals;
+    sortedTotals.reserve(TotalPerName.size());
+    for (const auto &e : TotalPerName) {
+      sortedTotals.push_back(e);
+    }
+    std::sort(sortedTotals.begin(), sortedTotals.end(), [](const NameAndDuration& a, const NameAndDuration& b) { return a.second > b.second; });
+    for (const auto &e : sortedTotals) {
+      auto durUs = duration_cast<microseconds>(e.second).count();
+      *os << "{ \"pid\":1, \"tid\":" << tid << ", \"ph\":\"X\", \"ts\":" << 0
+          << ", \"dur\":" << durUs << ", \"name\":\"Total "
+          << EscapeString(e.first.c_str()) << "\", \"args\":{ \"count\":"
+          << CountPerName[e.first] <<  ", \"avg ms\":"
+          << (durUs / CountPerName[e.first] / 1000)
+          << "} },\n";
+      ++tid;
+    }
+
+    // emit metadata event with process name
+    *os << "{ \"cat\":\"\", \"pid\":1, \"tid\":0, \"ts\":0, \"ph\":\"M\", "
+           "\"name\":\"process_name\", \"args\":{ \"name\":\"clang\" } }\n";
     *os << "] }\n";
   }
 
   std::vector<Entry> Stack;
   std::vector<Entry> Entries;
+  std::unordered_map<std::string, DurationType> TotalPerName;
+  std::unordered_map<std::string, size_t> CountPerName;
   time_point<steady_clock> StartTime;
 };
 
