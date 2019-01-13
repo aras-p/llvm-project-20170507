@@ -97,7 +97,7 @@ public:
       if (IncludeLoc.isValid()) {
         if (llvm::TimeTraceProfilerEnabled()) {
           auto fe = SM.getFileEntryForID(SM.getFileID(Loc));
-          llvm::TimeTraceProfilerBegin("SourceFile", fe != nullptr ? fe->getName().data() : "<unknown>");
+          llvm::TimeTraceProfilerBegin("Source", fe != nullptr ? fe->getName().data() : "<unknown>");
         }
 
         IncludeStack.push_back(IncludeLoc);
