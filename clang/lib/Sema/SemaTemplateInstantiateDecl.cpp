@@ -3878,7 +3878,7 @@ void Sema::InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
     return;
   }
 
-  llvm::TimeTraceScope timeScope("InstantiateFunction", Function->getNameAsString().data());
+  llvm::TimeTraceScope timeScope("InstantiateFunction", TIME_TRACE_OR_NULL(Function->getQualifiedNameAsString().c_str()));
 
   // If we're performing recursive template instantiation, create our own
   // queue of pending implicit instantiations that we will instantiate later,

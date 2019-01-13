@@ -233,7 +233,7 @@ Decl *Parser::ParseSingleDeclarationAfterTemplate(
     return nullptr;
   }
 
-  llvm::TimeTraceScope timeScope("Template", DeclaratorInfo.getIdentifier() != nullptr ? DeclaratorInfo.getIdentifier()->getName().data() : "<unknown>");
+  llvm::TimeTraceScope timeScope("ParseTemplate", TIME_TRACE_OR_NULL(DeclaratorInfo.getIdentifier() != nullptr ? DeclaratorInfo.getIdentifier()->getName().data() : "<unknown>"));
 
   LateParsedAttrList LateParsedAttrs(true);
   if (DeclaratorInfo.isFunctionDeclarator())

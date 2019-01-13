@@ -60,6 +60,11 @@ struct TimeTraceScope {
   }
 };
 
+/// Evaluates expression if time trace profiler is enabled, or passed null when it is not.
+/// Useful to avoid possibly expensive work in creating a string for profiling,
+/// when profiler is not enabled at all.
+#define TIME_TRACE_OR_NULL(expr) (llvm::TimeTraceProfilerInstance != nullptr ? (expr) : nullptr)
+
 } // end namespace llvm
 
 #endif

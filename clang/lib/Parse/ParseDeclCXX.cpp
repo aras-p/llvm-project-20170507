@@ -217,7 +217,6 @@ Parser::DeclGroupPtrTy Parser::ParseNamespace(DeclaratorContext Context,
       getCurScope(), InlineLoc, NamespaceLoc, IdentLoc, Ident,
       T.getOpenLocation(), attrs, ImplicitUsingDirectiveDecl);
 
-  llvm::TimeTraceScope timeScope("ParseNamespace", Ident != nullptr ? Ident->getName().data() : "<noname>");
   PrettyDeclStackTraceEntry CrashInfo(Actions.Context, NamespcDecl,
                                       NamespaceLoc, "parsing namespace");
 
@@ -3112,6 +3111,10 @@ void Parser::ParseCXXMemberSpecification(SourceLocation RecordLoc,
          TagType == DeclSpec::TST_union  ||
          TagType == DeclSpec::TST_class) && "Invalid TagType!");
 
+  llvm::TimeTraceScope timeScope("ParseClass", TIME_TRACE_OR_NULL(
+      TagDecl != nullptr && isa<NamedDecl>(TagDecl) ?
+      cast<NamedDecl>(TagDecl)->getQualifiedNameAsString().data() :
+      "<anonymous>"));
   PrettyDeclStackTraceEntry CrashInfo(Actions.Context, TagDecl, RecordLoc,
                                       "parsing struct/union/class body");
 

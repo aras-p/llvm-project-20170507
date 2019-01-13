@@ -2011,7 +2011,7 @@ Sema::InstantiateClass(SourceLocation PointOfInstantiation,
                                      Pattern, PatternDef, TSK, Complain))
     return true;
 
-  llvm::TimeTraceScope timeScope("InstantiateClass", Instantiation->getNameAsString().c_str());
+  llvm::TimeTraceScope timeScope("InstantiateClass", TIME_TRACE_OR_NULL(Instantiation->getQualifiedNameAsString().c_str()));
 
   Pattern = PatternDef;
 
